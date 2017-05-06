@@ -61,33 +61,30 @@ func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 
 
 func (t *SimpleChaincode) logging(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	fmt.Println("running logging()")
-	var txid string
+    var txid string
 	val := new(Bid)
-    
-	if len(args) != 3 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 3 (companyName, logMessage, DateTime).")
-	}
-	logAsBytes, err := stub.GetState(bidLogIndexStr)
+	indexAsBytes, err := stub.GetState(bidLogIndexStr)
 	if err != nil {
 		return nil, errors.New("Failed to get " + bidLogIndexStr)
 	}
-	var tmpIndex []string
-	json.Unmarshal(logAsBytes, &tmpIndex)
-	txid = stub.GetTxID()
+
+	// Unmarshal the index
+	var tmpIndex []Bid
+	json.Unmarshal(indexAsBytes, &tmpIndex)
+
+	    txid = stub.GetTxID()
 		val.companyName = args[0]
 		val.logMessage = args[1]
 		val.DateTime = args[2]
 		val.TxID = txid
-	bidAsBytes, _ := json.Marshal(val)
-	var bidAsString string
-	json.Unmarshal(bidAsBytes, &bidAsString)
-	tmpIndex = append(tmpIndex, bidAsString)
+		
+	// append the new id to the index
+	tmpIndex = append(tmpIndex, *val)
 	jsonAsBytes, _ := json.Marshal(tmpIndex)
 	err = stub.PutState(bidLogIndexStr, jsonAsBytes)
 	if err != nil {
 		return nil, errors.New("Error storing new " + bidLogIndexStr + " into ledger")
-	}	
+	}
 		
 	return nil, nil	
 }
