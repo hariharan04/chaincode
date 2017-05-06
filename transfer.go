@@ -4,309 +4,185 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"net/url"
-	"path"
-	"strconv"
-	"time"
-
 	"github.com/hyperledger/fabric/core/chaincode/shim"
+	"strconv"	
 )
 
 // SimpleChaincode example simple Chaincode implementation
 type SimpleChaincode struct {
 }
 
-func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	return nil, nil
+type Bid struct {
+	Status					string			`json:"status"`
+	BidTime                 string          `json:"BidTime"`
+	Amount					string			`json:"amount"`
+	Content					string			`json:"content"`
+	Username				string			`json:"username"`
+	TxID                    string          `json:"txid"`
 }
-
-
-func (t *SimpleChaincode) create_user(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-
-	var initial_asset int;
-	var user,password,key_password,key_balance string;
-	var err error;
-	
-	user = args[0];
-	password = args[1];
-	initial_asset = 10000;	
-
-	key_password = user + "_p";
-	key_balance = user + "_b";
-	
-	err = stub.PutState(key_password, []byte(password))
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = stub.PutState(key_balance, []byte(strconv.Itoa(initial_asset)))
-	
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
-}
-
-func (t *SimpleChaincode) transfer(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-
-	var sender, reciever string          // Entities
-	var senderAmount, recieverAmount int // Asset holdings
-	var X int                            // Transaction value
-	var err error
-
-	if len(args) != 3 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 3")
-	}
-
-	sender = args[0]
-	reciever = args[1]
-
-	isEnableSender := IsExistUser(sender)
-	isEnableReciever := IsExistUser(reciever)
-
-	if isEnableSender == false || isEnableReciever == false {
-		return nil, errors.New("No exsit user")
-	}
-
-	senderAmountbytes, err := stub.GetState(sender)
-	if err != nil {
-		return nil, errors.New("Failed to get state")
-	}
-	if senderAmountbytes == nil {
-		senderAmount = 0
-	} else {
-		senderAmount, _ = strconv.Atoi(string(senderAmountbytes))
-	}
-
-	recieverAmountbytes, err := stub.GetState(reciever)
-	if err != nil {
-		return nil, errors.New("Failed to get state")
-	}
-	if recieverAmountbytes == nil {
-		recieverAmount = 0
-	} else {
-		recieverAmount, _ = strconv.Atoi(string(recieverAmountbytes))
-	}
-
-	X, err = strconv.Atoi(args[2])
-	senderAmount = senderAmount - X
-	recieverAmount = recieverAmount + X
-	fmt.Printf("senderAmount = %d, recieverAmount = %d\n", senderAmount, recieverAmount)
-
-	err = stub.PutState(sender, []byte(strconv.Itoa(senderAmount)))
-	if err != nil {
-		return nil, err
-	}
-
-	err = stub.PutState(reciever, []byte(strconv.Itoa(recieverAmount)))
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
-}
-
-func (t *SimpleChaincode) delete(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	fmt.Printf("Running delete")
-
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 3")
-	}
-
-	A := args[0]
-
-	err := stub.DelState(A)
-	if err != nil {
-		return nil, errors.New("Failed to delete state")
-	}
-
-	return nil, nil
-}
-
-
-func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	fmt.Printf("Invoke called, determining function")
-
-	if function == "transfer" {
-		return t.transfer(stub, args)
-	} else if function == "create_user" {
-		return t.create_user(stub, args)	
-	} else if function == "init" {
-		return t.Init(stub, function, args)
-	} else if function == "delete" {
-		return t.delete(stub, args)
-	}
-
-	return nil, errors.New("Received unknown function invocation")
-}
-
-func (t *SimpleChaincode) Run(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	fmt.Printf("Run called, passing through to Invoke (same function)")
-
-	if function == "init" {
-		return t.Init(stub, function, args)
-	} else if function == "delete" {
-		return t.delete(stub, args)
-	}
-
-	return nil, errors.New("Received unknown function invocation")
-}
-
-func (t *SimpleChaincode) getBalance(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	var A string // Entities
-	var err error
-
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting name of the person to query")
-	}
-
-	A = args[0]
-	Avalbytes, err := stub.GetState(A)
-	if err != nil {
-		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
-		return nil, errors.New(jsonResp)
-	}
-
-	if Avalbytes == nil {
-		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
-		return nil, errors.New(jsonResp)
-	}
-
-	jsonResp := "{\"Name\":\"" + A + "\",\"Amount\":\"" + string(Avalbytes) + "\"}"
-	fmt.Printf("Query Response:%s\n", jsonResp)
-	return Avalbytes, nil
-
-}
-
-func (t *SimpleChaincode) cert(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-
-	var user, password, key_password string
-	var err error;
-
-	user = args[0];
-	key_password = user + "_p";
-	password = args[1];
-	
-	password_state_bytes, err := stub.GetState(key_password)
-
-	if err != nil {
-		jsonResp := "{\"Error\":\"user is not registered" + "\"}"
-		return nil, errors.New(jsonResp)
-	}
-	
-	if string(password_state_bytes) == password {
-		return []byte("200"),nil
-	}else{
-		jsonResp := "{\"Error\":\"password does not match" + "\"}"
-		return nil, errors.New(jsonResp)	
-	}
-		return nil, nil
-}
-
-func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-
-	fmt.Printf("Query called, determining function")
-
-	if function == "getBalance" {
-		return t.getBalance(stub, args)
-	} else if function == "cert" {
-		return t.cert(stub, args)
-	}
-
-	jsonResp := "{\"Error\":\"Received unknown function Query" + "\"}"
-	return nil, errors.New(jsonResp)
-}
-
-func IsExistUser(userId string) bool {
-	var client, _ = NewAPIClient("https://b23476f36d234c06aff5e3f1822e3c03-vp0.us.blockchain.ibm.com:5003/", "", "", nil)
-	registrarURL := "registrar/" + userId
-	var request, _ = client.NewRequest("GET", registrarURL, nil)
-	var response, responseError = client.HTTPClient.Do(request)
-	if responseError != nil {
-		return false
-	}
-	fmt.Println("response")
-	responseByteArray, _ := ioutil.ReadAll(response.Body)
-	defer response.Body.Close()
-	fmt.Println("unmarshal")
-	var registrarResult interface{}
-	unmarshalError := json.Unmarshal(responseByteArray, &registrarResult)
-	if unmarshalError != nil {
-		return false
-	}
-	fmt.Printf("%+v\n", registrarResult)
-	convertResult := registrarResult.(map[string]interface{})["OK"]
-	var isExist bool = false
-	if convertResult != nil {
-		resultCode := convertResult.(string)
-		fmt.Println(resultCode)
-		isExist = true
-	} else {
-		fmt.Println("login error")
-	}
-
-	return isExist
-}
-
-type APIClient struct {
-	URL        *url.URL
-	HTTPClient *http.Client
-
-	Username, Password string
-	Logger             *log.Logger
-}
-
-func NewAPIClient(urlString, username, password string, logger *log.Logger) (*APIClient, error) {
-	fmt.Println("start Creating NewAPIClient")
-	parserdURL, err := url.ParseRequestURI(urlString)
-	if err != nil {
-		return nil, errors.New("faild to parse URL: " + urlString)
-	}
-	fmt.Println("URL OK.")
-
-	var discardLogger = log.New(ioutil.Discard, "", log.LstdFlags)
-	if logger == nil {
-		logger = discardLogger
-	}
-	fmt.Println("Logger OK.")
-	apiClient := APIClient{}
-	apiClient.Username = username
-	apiClient.Password = password
-	apiClient.URL = parserdURL
-	apiClient.Logger = logger
-	apiClient.HTTPClient = &http.Client{Timeout: time.Duration(10) * time.Second}
-	return &apiClient, nil
-}
-
-func (apiClient *APIClient) NewRequest(method, spath string, body io.Reader) (*http.Request, error) {
-	u := *apiClient.URL
-	u.Path = path.Join(apiClient.URL.Path, spath)
-
-	request, error := http.NewRequest(method, u.String(), body)
-	if error != nil {
-		return nil, error
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	return request, nil
-}
-
-func DecodeBody(response *http.Response, out interface{}) error {
-	defer response.Body.Close()
-	decoder := json.NewDecoder(response.Body)
-	return decoder.Decode(out)
-}
-
+var bidIndexStr = "_bids"
 func main() {
 	err := shim.Start(new(SimpleChaincode))
 	if err != nil {
 		fmt.Printf("Error starting Simple chaincode: %s", err)
 	}
+}
+
+// Init resets all the things
+func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
+	return nil, nil
+}
+
+// Invoke isur entry point to invoke a chaincode function
+func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
+	fmt.Println("invoke is running " + function)
+
+	// Handle different functions
+	if function == "init" {
+		return t.Init(stub, "init", args)
+	} else if function == "register" {
+		return t.register(stub, args)
+	}  else if function == "bid" {
+		return t.bid(stub, args)
+	}  
+	fmt.Println("invoke did not find func: " + function)
+
+	return nil, errors.New("Received unknown function invocation: " + function)
+}
+
+// Query is our entry point for queries
+func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
+	fmt.Println("query is running " + function)
+
+	// Handle different functions
+	if function == "read" {
+		return t.read(stub, args)
+	}else if function == "get_all_bids" { 
+	   return t.get_all_bids(stub, args)
+	}
+	fmt.Println("query did not find func: " + function)
+
+	return nil, errors.New("Received unknown function query: " + function)
+}
+
+// register (aVoteToken)  - register a vote token
+func (t *SimpleChaincode) register(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	fmt.Println("running register()")
+	var  txid string
+	var err error
+	var jsonBytes []byte
+
+	if len(args) != 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1. a vote token to be registered.")
+	}
+	txid = stub.GetTxID()
+	val := Bid{Status: "NEW", Content: "", BidTime: "", Username: "", Amount: "", TxID: txid}
+	jsonBytes, _ = json.Marshal(val)
+	id, err:= t.append_id(stub, bidIndexStr, args[0], false)
+	err = stub.PutState(string(id), jsonBytes) // add the vote token into the chaincode state
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (t *SimpleChaincode) bid(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	fmt.Println("running vote()")
+	var key,  txid string
+	var jsonBytes []byte
+	val := new(Bid)
+
+	if len(args) != 6 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 5 (votetoken, candidateid, timestamp, ipaddr, ua).")
+	}
+	key = args[3]
+	jsonBytes, _ = t.read(stub, []string{args[3]})
+	json.Unmarshal(jsonBytes, val)
+	txid = stub.GetTxID()
+	
+		// the vote token exists and has not been voted.
+		val.Status = "BID"
+		val.Content = args[1]
+		val.BidTime = args[2]
+		val.Username = args[3]
+		val.Amount = args[4]
+		val.TxID = txid
+		jsonBytes, _ = json.Marshal(val)
+		id, err:= t.append_id(stub, bidIndexStr, key, false)
+		stub.PutState(string(id), jsonBytes)
+		if err != nil {
+		return nil, err
+	}
+		return nil, nil
+}
+
+// read - query function to read a vote token status
+func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	fmt.Println("running read()")
+	var key string
+	var err error
+	var jsonBytes []byte
+	
+	key = args[0]
+	jsonBytes, err = stub.GetState(key)
+	if err != nil {
+		return nil, errors.New("Error occurred when getting state of " + key)
+	}
+	
+	return jsonBytes, nil
+}
+func (t *SimpleChaincode) append_id(stub shim.ChaincodeStubInterface, indexStr string, id string, create bool) ([]byte, error) {
+
+	indexAsBytes, err := stub.GetState(indexStr)
+	if err != nil {
+		return nil, errors.New("Failed to get " + indexStr)
+	}
+	fmt.Println(indexStr + " retrieved")
+
+	// Unmarshal the index
+	var tmpIndex []string
+	json.Unmarshal(indexAsBytes, &tmpIndex)
+	fmt.Println(indexStr + " unmarshalled")
+
+	// Create new id
+	var newId = id
+	if create {
+		newId += strconv.Itoa(len(tmpIndex) + 1)
+	}
+
+	// append the new id to the index
+	tmpIndex = append(tmpIndex, newId)
+	jsonAsBytes, _ := json.Marshal(tmpIndex)
+	err = stub.PutState(indexStr, jsonAsBytes)
+	if err != nil {
+		return nil, errors.New("Error storing new " + indexStr + " into ledger")
+	}
+
+	return []byte(newId), nil
+
+}
+func (t *SimpleChaincode) get_all_bids(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	bidIndexBytes, err := stub.GetState(bidIndexStr)
+	if err != nil { return nil, errors.New("Failed to get bids index")}
+
+	var bidIndex []string
+	err = json.Unmarshal(bidIndexBytes, &bidIndex)
+	if err != nil { return nil, errors.New("Could not marshal bid indexes") }
+
+	var bids []Bid
+	for _, bidId := range bidIndex {
+		bytes, err := stub.GetState(bidId)
+		if err != nil { return nil, errors.New("Not able to get bid") }
+
+		var b Bid
+		err = json.Unmarshal(bytes, &b)
+		bids = append(bids, b)
+	}
+
+	bidsJson, err := json.Marshal(bids)
+	if err != nil { return nil, errors.New("Failed to marshal bids to JSON")}
+
+	return bidsJson, nil
+
 }
