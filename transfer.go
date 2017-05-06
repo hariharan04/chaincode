@@ -89,9 +89,8 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	bidIndexBytes, err := stub.GetState(bidLogIndexStr)
 	if err != nil { return nil, errors.New("Failed to read bids index")}
 
-	var bidIndex []string
-	err = json.Unmarshal(bidIndexBytes, &bidIndex)
-	if err != nil { return nil, errors.New("Could not marshal bid indexes") }
+	
+	
 	bidsJson, err := json.Marshal(bidIndexBytes)
 	if err != nil { return nil, errors.New("Failed to marshal bids to JSON")}
 
