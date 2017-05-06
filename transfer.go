@@ -12,10 +12,10 @@ type SimpleChaincode struct {
 }
 
 type Bid struct {
-	companyName				string			`json:"companyname"`
-	logMessage              string           `json:"logmessage"`
-	DateTime				string			`json:"datetime"`
-	TxID                    string          `json:"txid"`
+	comname				string			`json:"comname"`
+	logmess              string           `json:"logmess"`
+	dtime				string			`json:"dtime"`
+	txid                    string          `json:"txid"`
 }
 var bidLogIndexStr = "bidLogs"
 func main() {
@@ -73,10 +73,11 @@ func (t *SimpleChaincode) logging(stub shim.ChaincodeStubInterface, args []strin
 	json.Unmarshal(indexAsBytes, &tmpIndex)
 
 	    txid = stub.GetTxID()
-		val.companyName = args[0]
-		val.logMessage = args[1]
-		val.DateTime = args[2]
-		val.TxID = txid
+		
+		val.comname = args[0]
+		val.logmess = args[1]
+		val.dtime = args[0]+args[1]
+		val.txid = txid
 		
 	// append the new id to the index
 	tmpIndex = append(tmpIndex, *val)
