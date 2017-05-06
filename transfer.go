@@ -68,18 +68,28 @@ func (t *SimpleChaincode) logging(stub shim.ChaincodeStubInterface, args []strin
 	if len(args) != 3 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 3 (companyName, logMessage, DateTime).")
 	}
-	
+	logAsBytes, err := stub.GetState(bidLogIndexStr)
+	if err != nil {
+		return nil, errors.New("Failed to get " + bidLogIndexStr)
+	}
+	var tmpIndex []string
+	json.Unmarshal(logAsBytes, &tmpIndex)
 	txid = stub.GetTxID()
 		val.companyName = args[0]
 		val.logMessage = args[1]
 		val.DateTime = args[2]
 		val.TxID = txid
-		jsonBytes, _ := json.Marshal(val)
-		stub.PutState(bidLogIndexStr, jsonBytes)
+	bidAsBytes, _ := json.Marshal(val)
+	var bidAsString string
+	json.Unmarshal(bidAsBytes, &bidAsString)
+	tmpIndex = append(tmpIndex, bidAsString)
+	jsonAsBytes, _ := json.Marshal(tmpIndex)
+	err = stub.PutState(bidLogIndexStr, jsonAsBytes)
+	if err != nil {
+		return nil, errors.New("Error storing new " + bidLogIndexStr + " into ledger")
+	}	
 		
-
-	
-	return nil, nil
+	return nil, nil	
 }
 
 
