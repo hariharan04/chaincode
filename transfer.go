@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	"strconv"	
 )
 
 // SimpleChaincode example simple Chaincode implementation
@@ -13,14 +12,12 @@ type SimpleChaincode struct {
 }
 
 type Bid struct {
-	Status					string			`json:"status"`
-	BidTime                 string          `json:"BidTime"`
-	Amount					string			`json:"amount"`
-	Content					string			`json:"content"`
-	Username				string			`json:"username"`
+	companyName				string			`json:"companyname"`
+	logMessage              string           `json:"logmessage"`
+	DateTime				string			`json:"datetime"`
 	TxID                    string          `json:"txid"`
 }
-var bidIndexStr = "_bids"
+var bidLogIndexStr = "bidLogs"
 func main() {
 	err := shim.Start(new(SimpleChaincode))
 	if err != nil {
@@ -40,11 +37,9 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 	// Handle different functions
 	if function == "init" {
 		return t.Init(stub, "init", args)
-	} else if function == "register" {
-		return t.register(stub, args)
-	}  else if function == "bid" {
-		return t.bid(stub, args)
-	}  
+	} else if function == "logging" {
+		return t.logging(stub, args)
+	}   
 	fmt.Println("invoke did not find func: " + function)
 
 	return nil, errors.New("Received unknown function invocation: " + function)
@@ -57,130 +52,56 @@ func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 	// Handle different functions
 	if function == "read" {
 		return t.read(stub, args)
-	}else if function == "get_all_bids" { 
-	   return t.get_all_bids(stub, args)
 	}
 	fmt.Println("query did not find func: " + function)
 
 	return nil, errors.New("Received unknown function query: " + function)
 }
 
-// register (aVoteToken)  - register a vote token
-func (t *SimpleChaincode) register(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	fmt.Println("running register()")
-	var  txid string
-	var err error
-	var jsonBytes []byte
 
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1. a vote token to be registered.")
-	}
-	txid = stub.GetTxID()
-	val := Bid{Status: "NEW", Content: "", BidTime: "", Username: "", Amount: "", TxID: txid}
-	jsonBytes, _ = json.Marshal(val)
-	id, err:= t.append_id(stub, bidIndexStr, args[0], false)
-	err = stub.PutState(string(id), jsonBytes) // add the vote token into the chaincode state
-	if err != nil {
-		return nil, err
-	}
-	return nil, nil
-}
 
-func (t *SimpleChaincode) bid(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	fmt.Println("running vote()")
-	var key,  txid string
-	var jsonBytes []byte
+func (t *SimpleChaincode) logging(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	fmt.Println("running logging()")
+	var txid string
 	val := new(Bid)
-
-	if len(args) != 6 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 5 (votetoken, candidateid, timestamp, ipaddr, ua).")
+    
+	if len(args) != 3 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 3 (companyName, logMessage, DateTime).")
 	}
-	key = args[3]
-	jsonBytes, _ = t.read(stub, []string{args[3]})
-	json.Unmarshal(jsonBytes, val)
-	txid = stub.GetTxID()
-	
-		// the vote token exists and has not been voted.
-		val.Status = "BID"
-		val.Content = args[1]
-		val.BidTime = args[2]
-		val.Username = args[3]
-		val.Amount = args[4]
-		val.TxID = txid
-		jsonBytes, _ = json.Marshal(val)
-		id, err:= t.append_id(stub, bidIndexStr, key, false)
-		stub.PutState(string(id), jsonBytes)
-		if err != nil {
-		return nil, err
-	}
-		return nil, nil
-}
-
-// read - query function to read a vote token status
-func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	fmt.Println("running read()")
-	var key string
-	var err error
-	var jsonBytes []byte
-	
-	key = args[0]
-	jsonBytes, err = stub.GetState(key)
+	logAsBytes, err := stub.GetState(bidLogIndexStr)
 	if err != nil {
-		return nil, errors.New("Error occurred when getting state of " + key)
+		return nil, errors.New("Failed to get " + bidLogIndexStr)
 	}
-	
-	return jsonBytes, nil
-}
-func (t *SimpleChaincode) append_id(stub shim.ChaincodeStubInterface, indexStr string, id string, create bool) ([]byte, error) {
-
-	indexAsBytes, err := stub.GetState(indexStr)
-	if err != nil {
-		return nil, errors.New("Failed to get " + indexStr)
-	}
-	fmt.Println(indexStr + " retrieved")
-
-	// Unmarshal the index
 	var tmpIndex []string
-	json.Unmarshal(indexAsBytes, &tmpIndex)
-	fmt.Println(indexStr + " unmarshalled")
-
-	// Create new id
-	var newId = id
-	if create {
-		newId += strconv.Itoa(len(tmpIndex) + 1)
-	}
-
-	// append the new id to the index
-	tmpIndex = append(tmpIndex, newId)
+	json.Unmarshal(logAsBytes, &tmpIndex)
+	txid = stub.GetTxID()
+		val.companyName = args[0]
+		val.logMessage = args[1]
+		val.DateTime = args[2]
+		val.TxID = txid
+	bidAsBytes, _ := json.Marshal(val)
+	var bidAsString string
+	json.Unmarshal(bidAsBytes, &bidAsString)
+	tmpIndex = append(tmpIndex, bidAsString)
 	jsonAsBytes, _ := json.Marshal(tmpIndex)
-	err = stub.PutState(indexStr, jsonAsBytes)
+	err = stub.PutState(bidLogIndexStr, jsonAsBytes)
 	if err != nil {
-		return nil, errors.New("Error storing new " + indexStr + " into ledger")
-	}
-
-	return []byte(newId), nil
-
+		return nil, errors.New("Error storing new " + bidLogIndexStr + " into ledger")
+	}	
+		
+	return nil, nil	
 }
-func (t *SimpleChaincode) get_all_bids(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 
-	bidIndexBytes, err := stub.GetState(bidIndexStr)
-	if err != nil { return nil, errors.New("Failed to get bids index")}
+
+func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	bidIndexBytes, err := stub.GetState(bidLogIndexStr)
+	if err != nil { return nil, errors.New("Failed to read bids index")}
 
 	var bidIndex []string
 	err = json.Unmarshal(bidIndexBytes, &bidIndex)
 	if err != nil { return nil, errors.New("Could not marshal bid indexes") }
-
-	var bids []Bid
-	for _, bidId := range bidIndex {
-		bytes, err := stub.GetState(bidId)
-		if err != nil { return nil, errors.New("Not able to get bid") }
-
-		var b Bid
-		err = json.Unmarshal(bytes, &b)
-		bids = append(bids, b)
-	}
-
-	bidsJson, err := json.Marshal(bids)
+	bidsJson, err := json.Marshal(bidIndex)
 	if err != nil { return nil, errors.New("Failed to marshal bids to JSON")}
 
 	return bidsJson, nil
