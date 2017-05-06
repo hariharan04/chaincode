@@ -69,31 +69,28 @@ func (t *SimpleChaincode) logging(stub shim.ChaincodeStubInterface, args []strin
 		return nil, errors.New("Incorrect number of arguments. Expecting 3 (companyName, logMessage, DateTime).")
 	}
 	
-	
 	txid = stub.GetTxID()
 		val.companyName = args[0]
 		val.logMessage = args[1]
 		val.DateTime = args[2]
 		val.TxID = txid
-	bidAsBytes, _ := json.Marshal(val)
+		jsonBytes, _ := json.Marshal(val)
+		stub.PutState(bidLogIndexStr, jsonBytes)
+		
+
 	
-	stub.PutState(bidLogIndexStr, bidAsBytes)
-		
-		
-	return nil, nil	
+	return nil, nil
 }
 
 
 func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-
+var ret string
 	bidIndexBytes, err := stub.GetState(bidLogIndexStr)
 	if err != nil { return nil, errors.New("Failed to read bids index")}
 
-	
-	
-	bidsJson, err := json.Marshal(bidIndexBytes)
-	if err != nil { return nil, errors.New("Failed to marshal bids to JSON")}
+	ret = string(bidIndexBytes)
+	return []byte(ret), nil
 
-	return bidsJson, nil
+	
 
 }
