@@ -91,13 +91,18 @@ func (t *SimpleChaincode) logging(stub shim.ChaincodeStubInterface, args []strin
 
 
 func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-var ret string
-	bidIndexBytes, err := stub.GetState(bidLogIndexStr)
-	if err != nil { return nil, errors.New("Failed to read bids index")}
+     bidIndexBytes, err := stub.GetState(bidLogIndexStr)
+	if err != nil { return nil, errors.New("Failed to get bids index")}
 
-	ret = string(bidIndexBytes)
-	return []byte(ret), nil
+	var bidIndex []Bid
+	err = json.Unmarshal(bidIndexBytes, &bidIndex)
+	if err != nil { return nil, errors.New("Could not marshal bid indexes") }
 
 	
+
+	bidsJson, err := json.Marshal(bidIndex)
+	if err != nil { return nil, errors.New("Failed to marshal bids to JSON")}
+
+	return bidsJson, nil
 
 }
